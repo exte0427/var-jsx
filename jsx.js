@@ -27,6 +27,27 @@ var jsx;
         "textMaker": "Var.text",
         "stateMaker": "Var.state"
     };
+    jsx.parseText = function (text) {
+        var startNum = -1;
+        var endNum = -1;
+        for (var i = 0; i < text.length; i++) {
+            var nowChar = text[i];
+            if (nowChar !== "\n" && nowChar !== " ") {
+                startNum = i;
+                break;
+            }
+        }
+        for (var i = text.length - 1; i >= 0; i--) {
+            var nowChar = text[i];
+            if (nowChar !== "\n" && nowChar !== " ") {
+                endNum = i;
+                break;
+            }
+        }
+        if (startNum === -1 || endNum == -1)
+            return "";
+        return text.slice(startNum, endNum + 1);
+    };
     var parser = function (code) {
         var tokens = [];
         code = code.replaceAll("<-", "${").replaceAll("->", "}");
@@ -117,7 +138,10 @@ var jsx;
         return "".concat(jsx.setting.domMaker, "(`").concat(name, "`,").concat(states, ",").concat(childs, ")");
     };
     var makeJs_text = function (value) {
-        return "".concat(jsx.setting.textMaker, "(`").concat(value, "`)");
+        if (jsx.parseText(value) !== "")
+            return "".concat(jsx.setting.textMaker, "(`").concat(jsx.parseText(value), "`)");
+        else
+            return "";
     };
     var makeJs_child = function (tokens, myDom) {
         var returnTokens = [];

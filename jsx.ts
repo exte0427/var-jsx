@@ -26,6 +26,32 @@ export namespace jsx {
         "stateMaker": "Var.state"
     };
 
+    export const parseText = (text: string): string => {
+        let startNum = -1;
+        let endNum = -1;
+
+        for (let i = 0; i < text.length; i++) {
+            const nowChar: string = <string>text[i];
+            if (nowChar !== `\n` && nowChar !== ` `) {
+                startNum = i;
+                break;
+            }
+        }
+
+        for (let i = text.length - 1; i >= 0; i--) {
+            const nowChar: string = <string>text[i];
+            if (nowChar !== `\n` && nowChar !== ` `) {
+                endNum = i;
+                break;
+            }
+        }
+
+        if (startNum === -1 || endNum == -1)
+            return ``;
+
+        return text.slice(startNum, endNum + 1);
+    };
+
     const parser = (code: string): Array<token> => {
         const tokens: Array<token> = [];
 
@@ -137,7 +163,10 @@ export namespace jsx {
     }
 
     const makeJs_text = (value: string) => {
-        return `${setting.textMaker}(\`${value}\`)`;
+        if (parseText(value) !== ``)
+            return `${setting.textMaker}(\`${parseText(value)}\`)`;
+        else
+            return ``;
     }
 
     const makeJs_child = (tokens: Array<token>, myDom: dom): string => {
