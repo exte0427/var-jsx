@@ -243,5 +243,3 @@ export namespace jsx {
         return make(parser(code));
     }
 };
-
-console.log(jsx.translate(`const a = <div><hello><-cat-></hello></div>;if(a<b){1} if(a>b) { console.log(<div><hi>el</hi><div><e>ee</e></div></div>) }`));
