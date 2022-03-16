@@ -12,6 +12,8 @@ var jsx;
         tokenType[tokenType["space"] = 4] = "space";
         tokenType[tokenType["same"] = 5] = "same";
         tokenType[tokenType["string"] = 6] = "string";
+        tokenType[tokenType["varStart"] = 7] = "varStart";
+        tokenType[tokenType["varEnd"] = 8] = "varEnd";
     })(tokenType || (tokenType = {}));
     ;
     var token = /** @class */ (function () {
@@ -50,9 +52,16 @@ var jsx;
     };
     var parser = function (code) {
         var tokens = [];
-        code = code.replaceAll("<-", "${").replaceAll("->", "}");
         for (var nowIndex = 0; nowIndex < code.length; nowIndex++) {
-            if (code[nowIndex] == "<") {
+            if (code[nowIndex] == "<" && code[nowIndex + 1] == "-") {
+                tokens.push(new token(tokenType.varStart, "${"));
+                nowIndex++;
+            }
+            else if (code[nowIndex] == "-" && code[nowIndex + 1] == ">") {
+                tokens.push(new token(tokenType.varEnd, "}"));
+                nowIndex++;
+            }
+            else if (code[nowIndex] == "<") {
                 if (code[nowIndex + 1] == "/") {
                     tokens.push(new token(tokenType.domEnd_start, "</"));
                     nowIndex++;
@@ -120,7 +129,7 @@ var jsx;
             if (tokens[i].type == tokenType.cmd)
                 returnState.push(new state(tokens[i].data, ""));
             if (tokens[i].type == tokenType.same) {
-                returnState[returnState.length - 1] = new state(returnState[returnState.length - 1].data, tokens[i + 1].data);
+                returnState[returnState.length - 1] = new state(returnState[returnState.length - 1].key, tokens[i + 1].data);
                 i++;
             }
         }
@@ -148,9 +157,21 @@ var jsx;
         var nowText = [];
         var nowDom_index = 0;
         for (var i = myDom.startIndex.endIndex + 1; i < myDom.endIndex.startIndex; i++) {
-            if (nowDom_index < myDom.child.length && i == myDom.child[nowDom_index].startIndex.startIndex) {
-                if (nowText.filter(function (text) { return text.type === tokenType.cmd; }).length != 0)
+            if (nowText.length > 0 && nowText[0].type === tokenType.varStart && tokens[i].type === tokenType.varEnd) {
+                returnTokens.push(new token(tokenType.cmd, nowText.slice(1, nowText.length).map(function (element) { return element.data; }).join("")));
+                nowText = [];
+            }
+            else if (i < myDom.endIndex.startIndex && tokens[i].type === tokenType.varStart) {
+                if (makeJs_text(nowText.map(function (element) { return element.data; }).join("")) !== "")
                     returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(function (element) { return element.data; }).join(""))));
+                nowText = [];
+                nowText.push(tokens[i]);
+            }
+            else if ((nowDom_index < myDom.child.length && i == myDom.child[nowDom_index].startIndex.startIndex)) {
+                if (nowText.filter(function (text) { return text.type === tokenType.cmd; }).length != 0) {
+                    if (makeJs_text(nowText.map(function (element) { return element.data; }).join("")) !== "")
+                        returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(function (element) { return element.data; }).join(""))));
+                }
                 nowText = [];
                 returnTokens.push(new token(tokenType.cmd, htmlToJsx(tokens, myDom.child[nowDom_index])));
                 i = myDom.child[nowDom_index].endIndex.endIndex;
@@ -160,7 +181,8 @@ var jsx;
                 nowText.push(tokens[i]);
         }
         if (nowText.filter(function (text) { return text.type === tokenType.cmd; }).length != 0)
-            returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(function (element) { return element.data; }).join(""))));
+            if (makeJs_text(nowText.map(function (element) { return element.data; }).join("")) !== "")
+                returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(function (element) { return element.data; }).join(""))));
         return returnTokens.map(function (element) { return element.data; }).join(",");
     };
     var htmlToJsx = function (tokens, myDom) {
