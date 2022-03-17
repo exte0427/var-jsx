@@ -16,7 +16,46 @@ you can also customize the returning code
 jsx.setting = {
     "domMaker" : "make",
     "textMaker" : "text",
-    "stateMaker" : "state"
+    "stateMaker" : "state",
+    "changeMaker" : "change"
 }
 ```
-like this
+if you want to use variables, try this
+```html
+const a = <div><-variable-></div>;
+```
+```js
+const a = Var.make(`div`,[],Var.change(variable));
+```
+### domMaker
+dom maker function is the function that should function as making virtual dom\
+```js
+const domMakerName = (name,states, ...child) => {
+    //name : string
+    //states : Array<{name, date}>
+    //...child : virtualDom
+};
+```
+### textMaker
+textMaker function should function as making text virtual dom
+```js
+const textMakerName = (data) => {
+    //data : string
+};
+```
+### stateMaker
+stateMaker function should function as making state
+```js
+const stateMakerName = (name,data) => {
+    //name : string
+    //data : string
+}
+```
+### changeMaker
+changeMaker function should function\
+ as change variable (whose type isn't virtualDom) to virtualDom
+```js
+const changeMakerName = (data) => {
+    //data : any
+}
+```

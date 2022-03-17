@@ -27,7 +27,8 @@ var jsx;
     jsx.setting = {
         "domMaker": "Var.make",
         "textMaker": "Var.text",
-        "stateMaker": "Var.state"
+        "stateMaker": "Var.state",
+        "chageMaker": "Var.change"
     };
     jsx.parseText = function (text) {
         var startNum = -1;
@@ -49,6 +50,9 @@ var jsx;
         if (startNum === -1 || endNum == -1)
             return "";
         return text.slice(startNum, endNum + 1);
+    };
+    var str_varChange = function (value) {
+        return value.replaceAll("<-", "${").replaceAll("->", "}");
     };
     var parser = function (code) {
         var tokens = [];
@@ -139,12 +143,15 @@ var jsx;
         var returnCode = [];
         for (var _i = 0, states_1 = states; _i < states_1.length; _i++) {
             var state_1 = states_1[_i];
-            returnCode.push("".concat(jsx.setting.stateMaker, "(`").concat(state_1.key, "`,`").concat(state_1.data, "`)"));
+            returnCode.push("".concat(jsx.setting.stateMaker, "(`").concat(state_1.key, "`,`").concat(str_varChange(state_1.data), "`)"));
         }
         return "[".concat(returnCode.join(","), "]");
     };
     var makeJs_dom = function (name, states, childs) {
-        return "".concat(jsx.setting.domMaker, "(`").concat(name, "`,").concat(states, ",").concat(childs, ")");
+        if (jsx.parseText(childs) === "")
+            return "".concat(jsx.setting.domMaker, "(`").concat(name, "`,").concat(states, ")");
+        else
+            return "".concat(jsx.setting.domMaker, "(`").concat(name, "`,").concat(states, ",").concat(childs, ")");
     };
     var makeJs_text = function (value) {
         if (jsx.parseText(value) !== "")
@@ -152,19 +159,31 @@ var jsx;
         else
             return "";
     };
+    var makeJs_change = function (value) {
+        return "".concat(jsx.setting.chageMaker, "(").concat(value, ")");
+    };
     var makeJs_child = function (tokens, myDom) {
         var returnTokens = [];
         var nowText = [];
         var nowDom_index = 0;
+        var isVar = [];
         for (var i = myDom.startIndex.endIndex + 1; i < myDom.endIndex.startIndex; i++) {
             if (nowText.length > 0 && nowText[0].type === tokenType.varStart && tokens[i].type === tokenType.varEnd) {
-                returnTokens.push(new token(tokenType.cmd, nowText.slice(1, nowText.length).map(function (element) { return element.data; }).join("")));
-                nowText = [];
+                isVar.pop();
+                if (isVar.length === 0) {
+                    returnTokens.push(new token(tokenType.cmd, makeJs_change(make(nowText.slice(1, nowText.length)))));
+                    nowText = [];
+                }
+                else
+                    nowText.push(tokens[i]);
             }
             else if (i < myDom.endIndex.startIndex && tokens[i].type === tokenType.varStart) {
-                if (makeJs_text(nowText.map(function (element) { return element.data; }).join("")) !== "")
-                    returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(function (element) { return element.data; }).join(""))));
-                nowText = [];
+                if (isVar.length === 0) {
+                    if (makeJs_text(nowText.map(function (element) { return element.data; }).join("")) !== "")
+                        returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(function (element) { return element.data; }).join(""))));
+                    nowText = [];
+                }
+                isVar.push(true);
                 nowText.push(tokens[i]);
             }
             else if ((nowDom_index < myDom.child.length && i == myDom.child[nowDom_index].startIndex.startIndex)) {
@@ -211,33 +230,41 @@ var jsx;
         var dom_end = [];
         var domStart = [];
         var doms = [];
+        var varList = [];
         for (var index = 0; index < tokens.length; index++) {
             var nowToken = tokens[index];
-            if (nowToken.type == tokenType.domStart_start)
-                dom_start.push(index);
-            else if (nowToken.type == tokenType.domEnd_start)
-                dom_end.push(index);
-            else if (nowToken.type == tokenType.dom_end) {
-                if (dom_end.length != 0) {
-                    var firstPart = domStart[domStart.length - 1];
-                    var lastPart = new domPart(dom_end[dom_end.length - 1], index);
-                    var child = [];
-                    for (var i = 0; i < doms.length; i++) {
-                        if (doms[i].startIndex.startIndex > firstPart.startIndex) {
-                            child.push(doms[i]);
-                            doms.splice(i, 1);
-                            i--;
+            if (nowToken.type == tokenType.varStart)
+                varList.push(true);
+            if (nowToken.type == tokenType.varEnd)
+                varList.pop();
+            if (!varList.length) {
+                if (nowToken.type == tokenType.domStart_start)
+                    dom_start.push(index);
+                else if (nowToken.type == tokenType.domEnd_start)
+                    dom_end.push(index);
+                else if (nowToken.type == tokenType.dom_end) {
+                    if (dom_end.length != 0) {
+                        var firstPart = domStart[domStart.length - 1];
+                        var lastPart = new domPart(dom_end[dom_end.length - 1], index);
+                        var child = [];
+                        for (var i = 0; i < doms.length; i++) {
+                            if (doms[i].startIndex.startIndex > firstPart.startIndex) {
+                                child.push(doms[i]);
+                                doms.splice(i, 1);
+                                i--;
+                            }
                         }
+                        dom_end.pop();
+                        domStart.pop();
+                        doms.push(new dom(firstPart, lastPart, child));
                     }
-                    dom_end.pop();
-                    domStart.pop();
-                    doms.push(new dom(firstPart, lastPart, child));
-                }
-                else {
-                    var firstIndex = dom_start[dom_start.length - 1];
-                    var lastIndex = index;
-                    dom_start.pop();
-                    domStart.push(new domPart(firstIndex, lastIndex));
+                    else {
+                        var firstIndex = dom_start[dom_start.length - 1];
+                        var lastIndex = index;
+                        dom_start.pop();
+                        domStart.push(new domPart(firstIndex, lastIndex));
+                    }
+                    "";
                 }
             }
         }

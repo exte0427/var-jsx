@@ -26,7 +26,8 @@ export namespace jsx {
     export const setting = {
         "domMaker": "Var.make",
         "textMaker": "Var.text",
-        "stateMaker": "Var.state"
+        "stateMaker": "Var.state",
+        "chageMaker": "Var.change"
     };
 
     export const parseText = (text: string): string => {
@@ -54,6 +55,10 @@ export namespace jsx {
 
         return text.slice(startNum, endNum + 1);
     };
+
+    const str_varChange = (value: string) => {
+        return value.replaceAll(`<-`, `\${`).replaceAll(`->`, `}`);
+    }
 
     const parser = (code: string): Array<token> => {
         const tokens: Array<token> = [];
@@ -161,14 +166,17 @@ export namespace jsx {
         let returnCode: Array<string> = [];
 
         for (let state of states) {
-            returnCode.push(`${setting.stateMaker}(\`${state.key}\`,\`${state.data}\`)`);
+            returnCode.push(`${setting.stateMaker}(\`${state.key}\`,\`${str_varChange(state.data)}\`)`);
         }
 
         return `[${returnCode.join(`,`)}]`;
     }
 
     const makeJs_dom = (name: string, states: string, childs: string) => {
-        return `${setting.domMaker}(\`${name}\`,${states},${childs})`;
+        if (parseText(childs) === "")
+            return `${setting.domMaker}(\`${name}\`,${states})`;
+        else
+            return `${setting.domMaker}(\`${name}\`,${states},${childs})`;
     }
 
     const makeJs_text = (value: string) => {
@@ -178,20 +186,34 @@ export namespace jsx {
             return ``;
     }
 
+    const makeJs_change = (value: string) => {
+        return `${setting.chageMaker}(${value})`;
+    }
+
     const makeJs_child = (tokens: Array<token>, myDom: dom): string => {
         let returnTokens: Array<token> = [];
         let nowText: Array<token> = [];
         let nowDom_index = 0;
+        let isVar: Array<boolean> = [];
+
         for (let i = myDom.startIndex.endIndex + 1; i < myDom.endIndex.startIndex; i++) {
             if (nowText.length > 0 && nowText[0].type === tokenType.varStart && tokens[i].type === tokenType.varEnd) {
-                returnTokens.push(new token(tokenType.cmd, nowText.slice(1, nowText.length).map(element => element.data).join(``)));
-                nowText = [];
+                isVar.pop();
+                if (isVar.length === 0) {
+                    returnTokens.push(new token(tokenType.cmd, makeJs_change(make(nowText.slice(1, nowText.length)))));
+                    nowText = [];
+                }
+                else
+                    nowText.push(tokens[i]);
             }
             else if (i < myDom.endIndex.startIndex && tokens[i].type === tokenType.varStart) {
-                if (makeJs_text(nowText.map(element => element.data).join(``)) !== ``)
-                    returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(element => element.data).join(``))));
+                if (isVar.length === 0) {
+                    if (makeJs_text(nowText.map(element => element.data).join(``)) !== ``)
+                        returnTokens.push(new token(tokenType.cmd, makeJs_text(nowText.map(element => element.data).join(``))));
 
-                nowText = [];
+                    nowText = [];
+                }
+                isVar.push(true);
                 nowText.push(tokens[i]);
             }
             else if ((nowDom_index < myDom.child.length && i == myDom.child[nowDom_index].startIndex.startIndex)) {
@@ -251,38 +273,47 @@ export namespace jsx {
         let domStart: Array<domPart> = [];
         let doms: Array<dom> = [];
 
+        let varList: Array<boolean> = [];
+
         for (let index = 0; index < tokens.length; index++) {
             const nowToken = tokens[index];
 
-            if (nowToken.type == tokenType.domStart_start)
-                dom_start.push(index);
-            else if (nowToken.type == tokenType.domEnd_start)
-                dom_end.push(index);
-            else if (nowToken.type == tokenType.dom_end) {
-                if (dom_end.length != 0) {
-                    const firstPart = domStart[domStart.length - 1];
-                    const lastPart = new domPart(dom_end[dom_end.length - 1], index);
-                    const child: Array<dom> = [];
+            if (nowToken.type == tokenType.varStart)
+                varList.push(true);
+            if (nowToken.type == tokenType.varEnd)
+                varList.pop();
 
-                    for (let i = 0; i < doms.length; i++) {
-                        if (doms[i].startIndex.startIndex > firstPart.startIndex) {
-                            child.push(doms[i]);
-                            doms.splice(i, 1);
-                            i--;
+            if (!varList.length) {
+                if (nowToken.type == tokenType.domStart_start)
+                    dom_start.push(index);
+                else if (nowToken.type == tokenType.domEnd_start)
+                    dom_end.push(index);
+                else if (nowToken.type == tokenType.dom_end) {
+                    if (dom_end.length != 0) {
+                        const firstPart = domStart[domStart.length - 1];
+                        const lastPart = new domPart(dom_end[dom_end.length - 1], index);
+                        const child: Array<dom> = [];
+
+                        for (let i = 0; i < doms.length; i++) {
+                            if (doms[i].startIndex.startIndex > firstPart.startIndex) {
+                                child.push(doms[i]);
+                                doms.splice(i, 1);
+                                i--;
+                            }
                         }
+
+                        dom_end.pop();
+                        domStart.pop();
+
+                        doms.push(new dom(firstPart, lastPart, child));
                     }
+                    else {
+                        const firstIndex = dom_start[dom_start.length - 1];
+                        const lastIndex = index;
+                        dom_start.pop();
 
-                    dom_end.pop();
-                    domStart.pop();
-
-                    doms.push(new dom(firstPart, lastPart, child));
-                }
-                else {
-                    const firstIndex = dom_start[dom_start.length - 1];
-                    const lastIndex = index;
-                    dom_start.pop();
-
-                    domStart.push(new domPart(firstIndex, lastIndex));
+                        domStart.push(new domPart(firstIndex, lastIndex));
+                    } ``
                 }
             }
         }
